@@ -61,41 +61,46 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
-      {/* Top Nav */}
-      <header className="bg-card/95 backdrop-blur-md border-b border-border sticky top-0 z-40 header-shadow transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+      {/* Top Nav - Brutalist Box */}
+      <header className="bg-card border-b-2 border-border-strong sticky top-0 z-50 transition-all shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 sm:h-20 lg:h-24">
+          <div className="flex items-center gap-4">
             <button
-              className="lg:hidden p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="lg:hidden p-2 border-2 border-transparent hover:border-border-strong bg-muted hover:bg-card text-foreground transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary"
               onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label={mobileOpen ? "Close Menu" : "Open Menu"}
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              <div className="relative w-5 h-5 flex flex-col justify-between overflow-hidden">
+                <span className={`w-full h-0.5 bg-current transform transition-all duration-300 ${mobileOpen ? 'rotate-45 translate-y-2' : ''}`} />
+                <span className={`w-full h-0.5 bg-current transition-all duration-300 ${mobileOpen ? 'opacity-0 translate-x-3' : ''}`} />
+                <span className={`w-full h-0.5 bg-current transform transition-all duration-300 ${mobileOpen ? '-rotate-45 -translate-y-2.5' : ''}`} />
+              </div>
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center shadow-sm">
-                <Shield className="h-5 w-5 text-accent-foreground" />
+            <Link href="/dashboard" className="flex items-center gap-3 group focus:outline-none">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary flex items-center justify-center border-2 border-primary group-hover:bg-background transition-colors">
+                <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground group-hover:text-primary transition-colors" />
               </div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-bold text-foreground tracking-tight leading-tight">BP & AF Insurance</p>
-                <p className="text-[11px] font-medium text-muted-foreground leading-tight uppercase tracking-wider">Customer Portal</p>
+              <div className="hidden sm:flex flex-col">
+                <p className="text-sm sm:text-base font-black text-foreground tracking-tighter uppercase">BP & AF Insurance</p>
+                <div className="h-[2px] w-full bg-border-strong my-0.5 group-hover:bg-primary transition-colors" />
+                <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">Customer Portal</p>
               </div>
-            </div>
+            </Link>
           </div>
 
           {/* Desktop Nav */}
-          <nav className="hidden lg:flex items-center gap-1.5">
+          <nav className="hidden lg:flex items-center gap-2">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold uppercase tracking-widest transition-all border-2 ${isActive
+                      ? "bg-foreground text-background border-foreground shadow-[4px_4px_0_var(--ring)] translate-x-[-2px] translate-y-[-2px]"
+                      : "bg-transparent text-muted-foreground border-transparent hover:border-border-strong hover:text-foreground"
+                    }`}
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
@@ -105,61 +110,65 @@ export default function DashboardLayout({
           </nav>
 
           {/* User area */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="p-2 sm:p-2.5 border-2 border-border bg-card text-foreground hover:border-primary hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === 'dark' ? <Sun className="h-4 w-4 sm:h-5 sm:w-5" /> : <Moon className="h-4 w-4 sm:h-5 sm:w-5" />}
             </button>
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-sm font-semibold text-foreground leading-tight">
+
+            <div className="hidden sm:flex flex-col items-end px-4 border-r-2 border-l-2 border-border py-1">
+              <span className="text-sm font-bold text-foreground uppercase tracking-wider">
                 {customer.name}
               </span>
-              <span className="text-xs text-muted-foreground leading-tight">
+              <span className="text-[10px] font-semibold text-muted-foreground">
                 {customer.email}
               </span>
             </div>
+
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="group flex items-center gap-2 p-2 sm:px-4 sm:py-2.5 border-2 border-transparent text-sm font-bold uppercase tracking-widest text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-all focus:outline-none focus:ring-2 focus:ring-destructive"
+              aria-label="Sign out"
             >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign Out</span>
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5 group-hover:-translate-x-1 transition-transform" />
+              <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
         </div>
 
-        {/* Mobile Nav */}
-        {mobileOpen && (
-          <nav className="lg:hidden border-t border-border px-4 py-3 bg-card/95 backdrop-blur-md shadow-lg animate-in slide-in-from-top-2">
-            <div className="flex flex-col gap-1">
-              {NAV_ITEMS.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        {/* Mobile Nav - Brutalist Drawer */}
+        <div
+          className={`lg:hidden overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${mobileOpen ? 'max-h-96 border-t-2 border-border-strong' : 'max-h-0'}`}
+        >
+          <nav className="bg-card flex flex-col divide-y-2 divide-border p-4 gap-2">
+            {NAV_ITEMS.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-4 px-4 py-4 text-sm font-black uppercase tracking-[0.15em] transition-all border-2 ${isActive
+                      ? "bg-foreground text-background border-foreground translate-x-1"
+                      : "bg-muted/50 text-foreground border-transparent hover:border-border-strong hover:bg-card"
                     }`}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+                >
+                  <item.icon className={`h-5 w-5 ${isActive ? 'text-background' : 'text-primary'}`} />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
-        )}
+        </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-in fade-in duration-500">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 lg:py-16 animate-in slide-in-from-bottom-8 fade-in duration-700">
+        {children}
+      </main>
     </div>
   );
 }

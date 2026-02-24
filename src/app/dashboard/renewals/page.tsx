@@ -30,30 +30,30 @@ const STATUS_CONFIG: Record<
 > = {
   due: {
     icon: AlertTriangle,
-    bg: "bg-chart-4/15",
-    text: "text-chart-4",
-    border: "border-chart-4/30",
+    bg: "bg-chart-4",
+    text: "text-foreground",
+    border: "border-foreground",
     label: "Due",
   },
   contacted: {
     icon: Phone,
     bg: "bg-muted",
     text: "text-muted-foreground",
-    border: "border-border",
+    border: "border-border-strong",
     label: "Contacted",
   },
   renewed: {
     icon: CheckCircle2,
-    bg: "bg-accent/15",
-    text: "text-accent-foreground",
-    border: "border-accent/30",
+    bg: "bg-[#10b981]",
+    text: "text-white",
+    border: "border-foreground",
     label: "Renewed",
   },
   lost: {
     icon: AlertTriangle,
-    bg: "bg-destructive/10",
-    text: "text-destructive",
-    border: "border-destructive/20",
+    bg: "bg-destructive",
+    text: "text-destructive-foreground",
+    border: "border-foreground",
     label: "Lost",
   },
 };
@@ -104,60 +104,58 @@ export default function RenewalsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold text-foreground tracking-tight">Renewals</h1>
-        <p className="text-muted-foreground font-medium">
-          Track your policy renewal dates and status.
+      <div className="flex flex-col gap-2 relative z-10">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter uppercase text-foreground leading-[0.9]">
+          Renewals
+        </h1>
+        <p className="text-muted-foreground font-bold text-sm sm:text-base uppercase tracking-widest max-w-2xl mt-2 border-l-4 border-primary pl-4">
+          TRACK POLICY RENEWAL DATES
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 bg-muted/60 p-1.5 rounded-2xl w-fit border border-border shadow-sm">
+      <div className="flex gap-2 bg-muted/30 p-2 border-4 border-foreground shadow-[4px_4px_0_var(--foreground)] w-fit relative z-10">
         <button
           onClick={() => setTab("upcoming")}
-          className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-            tab === "upcoming"
-              ? "bg-card text-foreground shadow-md ring-1 ring-border"
-              : "text-muted-foreground hover:text-foreground hover:bg-card/50"
-          }`}
+          className={`px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-black uppercase tracking-widest transition-all duration-200 border-2 ${tab === "upcoming"
+              ? "bg-primary text-primary-foreground border-foreground shadow-[4px_4px_0_var(--foreground)] translate-y-[-2px] translate-x-[-2px]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-card hover:border-border-strong"
+            }`}
         >
           Upcoming
-          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-xs ${
-            tab === "upcoming" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}>{upcoming.length}</span>
+          <span className={`ml-3 px-2 py-0.5 text-xs font-black border-2 ${tab === "upcoming" ? "bg-background text-foreground border-foreground shadow-[2px_2px_0_var(--foreground)]" : "bg-muted text-muted-foreground border-transparent"
+            }`}>{upcoming.length}</span>
         </button>
         <button
           onClick={() => setTab("completed")}
-          className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-            tab === "completed"
-              ? "bg-card text-foreground shadow-md ring-1 ring-border"
-              : "text-muted-foreground hover:text-foreground hover:bg-card/50"
-          }`}
+          className={`px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-black uppercase tracking-widest transition-all duration-200 border-2 ${tab === "completed"
+              ? "bg-primary text-primary-foreground border-foreground shadow-[4px_4px_0_var(--foreground)] translate-y-[-2px] translate-x-[-2px]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-card hover:border-border-strong"
+            }`}
         >
           Completed
-          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-xs ${
-            tab === "completed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}>{completed.length}</span>
+          <span className={`ml-3 px-2 py-0.5 text-xs font-black border-2 ${tab === "completed" ? "bg-background text-foreground border-foreground shadow-[2px_2px_0_var(--foreground)]" : "bg-muted text-muted-foreground border-transparent"
+            }`}>{completed.length}</span>
         </button>
       </div>
 
       {/* Renewals List */}
       {loading ? (
-        <div className="bg-card rounded-2xl border border-border p-16 flex flex-col items-center justify-center gap-4 shadow-sm">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-          <p className="text-muted-foreground font-medium">Loading renewals...</p>
+        <div className="bg-card border-4 border-foreground p-16 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)]">
+          <div className="w-16 h-16 border-4 border-t-primary border-r-transparent border-b-foreground border-l-transparent rounded-full animate-spin" />
+          <p className="text-foreground font-black uppercase tracking-[0.2em]">Loading renewals...</p>
         </div>
       ) : display.length === 0 ? (
-        <div className="bg-card rounded-2xl border border-border p-16 flex flex-col items-center justify-center gap-4 shadow-sm">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-            <CalendarClock className="h-8 w-8 text-muted-foreground" />
+        <div className="bg-striped border-4 border-foreground p-12 sm:p-20 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)] relative overflow-hidden">
+          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-primary flex items-center justify-center mb-4 shadow-[8px_8px_0_var(--foreground)] border-4 border-foreground relative z-10 animate-in zoom-in duration-700">
+            <CalendarClock className="h-12 w-12 sm:h-16 sm:w-16 text-primary-foreground" />
           </div>
-          <p className="text-foreground font-medium text-lg">
+          <p className="text-foreground font-black text-3xl sm:text-4xl tracking-tighter uppercase relative z-10 text-center bg-card px-4 border-2 border-foreground">
             {tab === "upcoming"
               ? "You're all caught up!"
               : "No completed renewals yet."}
           </p>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground font-bold text-sm sm:text-base tracking-wider uppercase text-center max-w-md relative z-10 bg-card p-4 border-2 border-border-strong">
             {tab === "upcoming"
               ? "No upcoming renewals at this time."
               : "Completed renewals will appear here."}
@@ -176,45 +174,52 @@ export default function RenewalsPage() {
             return (
               <div
                 key={r.id}
-                className="bg-card rounded-2xl border border-border px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
+                className="bg-card border-4 border-foreground p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[4px_4px_0_var(--foreground)] hover:-translate-y-1 hover:shadow-[8px_8px_0_var(--ring)] hover:border-ring transition-all duration-300 relative overflow-hidden group"
               >
-                <div className="flex items-center gap-4">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-muted/20 rotate-45 translate-x-16 -translate-y-16 group-hover:bg-primary/5 transition-colors duration-500" />
+
+                <div className="flex items-start sm:items-center gap-4 relative z-10">
                   <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${config.bg} ${config.border} border`}
+                    className={`w-14 h-14 flex-shrink-0 flex items-center justify-center border-2 shadow-[2px_2px_0_var(--foreground)] ${config.bg} ${config.border} transition-colors group-hover:border-primary`}
                   >
                     <Icon className={`h-6 w-6 ${config.text}`} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <p className="text-base font-bold text-foreground tracking-tight">
+                    <p className="text-xl sm:text-2xl font-black text-foreground tracking-tighter group-hover:text-primary transition-colors uppercase">
                       {r.policy_number || r.policy_id}
                     </p>
-                    <p className="text-xs font-medium text-muted-foreground flex flex-wrap items-center gap-2">
-                      <span>Due: {dueDate ? format(dueDate, "dd MMM yyyy") : "—"}</span>
+                    <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em] flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1">
+                        <CalendarClock className="w-3 h-3" />
+                        DUE: {dueDate ? format(dueDate, "dd MMM yyyy") : "—"}
+                      </span>
                       {daysLeft !== null && r.status !== "renewed" && (
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-semibold ${
-                            daysLeft < 0
-                              ? "bg-destructive/10 text-destructive"
-                              : daysLeft <= 7
-                              ? "bg-chart-4/15 text-chart-4"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {daysLeft < 0
-                            ? `${Math.abs(daysLeft)} days overdue`
-                            : daysLeft === 0
-                            ? "Due today"
-                            : `${daysLeft} days left`}
-                        </span>
+                        <>
+                          <span className="w-1.5 h-1.5 bg-foreground" />
+                          <span
+                            className={`px-2 py-0.5 border-2 ${daysLeft < 0
+                                ? "bg-destructive text-destructive-foreground border-foreground"
+                                : daysLeft <= 7
+                                  ? "bg-chart-4 text-foreground border-foreground"
+                                  : "bg-muted text-muted-foreground border-border-strong"
+                              } shadow-[2px_2px_0_var(--foreground)]`}
+                          >
+                            {daysLeft < 0
+                              ? `${Math.abs(daysLeft)} DAYS OVERDUE`
+                              : daysLeft === 0
+                                ? "DUE TODAY"
+                                : `${daysLeft} DAYS LEFT`}
+                          </span>
+                        </>
                       )}
-                    </p>
+                    </div>
                     {r.notes && (
-                      <p className="text-xs text-muted-foreground italic">{r.notes}</p>
+                      <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-bold italic border-l-2 border-primary pl-2">{r.notes}</p>
                     )}
                   </div>
                 </div>
                 <span
-                  className={`self-start sm:self-center px-3 py-1.5 rounded-full text-xs font-bold border shadow-sm ${config.bg} ${config.text} ${config.border} tracking-wide`}
+                  className={`relative z-10 self-start sm:self-center px-4 py-2 text-[10px] sm:text-xs font-black border-2 shadow-[2px_2px_0_var(--foreground)] ${config.bg} ${config.text} ${config.border} uppercase tracking-[0.2em]`}
                 >
                   {config.label}
                 </span>

@@ -63,8 +63,11 @@ export async function POST(req: NextRequest) {
       });
       firebaseUid = userRecord.uid;
 
-      // Set custom claim so Firestore rules can identify customers
-      await adminAuth.setCustomUserClaims(firebaseUid, { role: "customer" });
+      // Set custom claim so Firestore rules can identify customers and their assigned ID
+      await adminAuth.setCustomUserClaims(firebaseUid, { 
+        role: "customer",
+        customer_id: customerId 
+      });
     } catch (authErr: unknown) {
       // If user already exists in Auth, use the existing UID
       if (
@@ -77,7 +80,10 @@ export async function POST(req: NextRequest) {
         firebaseUid = existing.uid;
         // Update password for re-sends
         await adminAuth.updateUser(firebaseUid, { password: plainPassword });
-        await adminAuth.setCustomUserClaims(firebaseUid, { role: "customer" });
+        await adminAuth.setCustomUserClaims(firebaseUid, { 
+          role: "customer",
+          customer_id: customerId 
+        });
       } else {
         throw authErr;
       }
@@ -99,17 +105,22 @@ export async function POST(req: NextRequest) {
 
     // Send credentials email
     const portalUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    let emailSent = false;
     try {
       await sendCustomerCredentials(email, name, plainPassword, portalUrl);
+      emailSent = true;
     } catch (emailErr) {
       console.error("[customer-auth] Email send failed:", emailErr);
-      // Don't fail the request — account was created, email just failed
+      // We don't fail the request, but we report it in the response
     }
 
     return NextResponse.json({
       success: true,
-      message: `Portal account created and credentials sent to ${email}`,
+      message: emailSent 
+        ? `Portal account created and credentials sent to ${email}`
+        : `Portal account created, but failed to send credentials email to ${email}.`,
       firebase_uid: firebaseUid,
+      email_sent: emailSent
     });
   } catch (err) {
     console.error("[customer-auth/create] Error:", err);
