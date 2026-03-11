@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   collection,
   query,
@@ -11,7 +11,21 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { FileText, Search, Filter } from "lucide-react";
+import {
+  Search,
+  Filter,
+  AlertCircle,
+  Shield,
+  Calendar,
+  IndianRupee,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Clock,
+  Download,
+  Eye,
+} from "lucide-react";
 import { format } from "date-fns";
 
 interface Policy {
@@ -25,21 +39,46 @@ interface Policy {
   sum_insured?: number;
   insurer_name?: string;
   payment_frequency?: string;
+  customer_name?: string;
+  pdf_url?: string;
 }
+
+const PAGE_SIZE = 20;
+
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30",
+  expired: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30",
+  cancelled: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+  archived: "bg-muted-foreground/20 text-muted-foreground border-muted-foreground/30",
+};
 
 function toDate(v: Timestamp | string | undefined): Date | null {
   if (!v) return null;
-  if (v instanceof Timestamp) return v.toDate();
+  if (typeof v === 'object' && 'toDate' in v && typeof v.toDate === 'function') return v.toDate();
+  if (typeof v === 'object' && 'seconds' in v) return new Date((v as any).seconds * 1000);
   return new Date(v as string);
+}
+
+function formatDate(v: Timestamp | string | undefined): string {
+  const d = toDate(v);
+  if (!d) return "—";
+  return format(d, "dd MMM yyyy");
+}
+
+function formatCurrency(val: number | undefined) {
+  if (val === undefined || val === null) return "—";
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
 }
 
 export default function PoliciesPage() {
   const { customer } = useAuth();
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   useEffect(() => {
     if (!customer?.customer_id) return;
@@ -53,9 +92,7 @@ export default function PoliciesPage() {
           )
         );
         setPolicies(
-          snap.docs.map(
-            (d) => ({ id: d.id, ...d.data() } as unknown as Policy)
-          )
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as unknown as Policy))
         );
       } catch (err) {
         console.error("Failed to load policies:", err);
@@ -65,189 +102,353 @@ export default function PoliciesPage() {
     })();
   }, [customer?.customer_id]);
 
-  const filtered = policies.filter((p) => {
-    const matchSearch =
-      !search ||
-      p.policy_number.toLowerCase().includes(search.toLowerCase()) ||
-      p.policy_type.toLowerCase().includes(search.toLowerCase()) ||
-      (p.insurer_name || "").toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || p.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  // Derived policy types for filter
+  const uniqueTypes = useMemo(() => {
+    const types = new Set(policies.map(p => p.policy_type).filter(Boolean));
+    return Array.from(types).sort();
+  }, [policies]);
+
+  const filtered = useMemo(() => {
+    let result = [...policies];
+    if (typeFilter !== "all") {
+      result = result.filter((p) => p.policy_type === typeFilter);
+    }
+    if (statusFilter !== "all") {
+      result = result.filter((p) => p.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.policy_number?.toLowerCase().includes(q) ||
+          p.policy_type?.toLowerCase().includes(q) ||
+          p.insurer_name?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [policies, searchQuery, typeFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginatedPolicies = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-2 relative z-10">
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter uppercase text-foreground leading-[0.9]">
-          My Policies
-        </h1>
-        <p className="text-muted-foreground font-bold text-sm sm:text-base uppercase tracking-widest max-w-2xl mt-2 border-l-4 border-primary pl-4">
-          VIEW AND MANAGE YOUR PORTFOLIO
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold font-mono text-foreground tracking-tight">Policies</h1>
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} total {filtered.length === 1 ? 'policy' : 'policies'}
         </p>
       </div>
 
-      {/* Filters - Brutalist Bars */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors z-10" />
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search by policy number, type, or insurer..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 sm:py-4 bg-card border-4 border-foreground text-sm font-black uppercase tracking-wider focus:ring-4 focus:ring-primary/30 focus:border-primary outline-none transition-all shadow-[4px_4px_0_var(--foreground)] placeholder:text-muted-foreground/60"
+            placeholder="Search policies..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full pl-9 pr-4 py-2 border-2 border-border bg-card text-sm rounded-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors placeholder:text-muted-foreground"
           />
         </div>
-        <div className="relative group min-w-48">
-          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            title="Filter by status"
-            aria-label="Filter by status"
-            className="w-full pl-12 pr-8 py-3 sm:py-4 bg-muted/30 border-4 border-border-strong text-sm font-black uppercase tracking-wider appearance-none focus:ring-4 focus:ring-primary/30 focus:border-primary outline-none transition-all shadow-sm cursor-pointer hover:bg-card hover:border-foreground"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-            <svg className="h-4 w-4 text-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-            </svg>
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-[130px]">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-8 pr-8 py-2 border-2 border-border bg-card text-sm rounded-md appearance-none focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer"
+            >
+              <option value="all">All Types</option>
+              {uniqueTypes.map(t => (
+                <option key={t} value={t} className="capitalize">{t}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="relative min-w-[120px]">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-3 pr-8 py-2 border-2 border-border bg-card text-sm rounded-md appearance-none focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="archived">Archived</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Policies List */}
       {loading ? (
-        <div className="bg-card border-4 border-foreground p-16 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)]">
-          <div className="w-16 h-16 border-4 border-t-primary border-r-transparent border-b-foreground border-l-transparent rounded-full animate-spin" />
-          <p className="text-foreground font-black uppercase tracking-[0.2em]">Loading portfolio...</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-striped border-4 border-foreground p-12 sm:p-20 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)] relative overflow-hidden">
-          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-primary flex items-center justify-center mb-4 shadow-[8px_8px_0_var(--foreground)] border-4 border-foreground relative z-10 animate-in zoom-in duration-700">
-            <FileText className="h-12 w-12 sm:h-16 sm:w-16 text-primary-foreground" />
-          </div>
-          <p className="text-foreground font-black text-3xl sm:text-4xl tracking-tighter uppercase relative z-10 text-center bg-card px-4 border-2 border-foreground">
-            {policies.length === 0
-              ? "No policies found"
-              : "No matches found"}
-          </p>
-          <p className="text-muted-foreground font-bold text-sm sm:text-base tracking-wider uppercase text-center max-w-md relative z-10 bg-card p-4 border-2 border-border-strong">
-            {policies.length === 0
-              ? "Your policies will appear here once they are added."
-              : "Try adjusting your search or filter criteria."}
-          </p>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-16 w-full rounded-md skeleton" />
+          ))}
         </div>
       ) : (
-        <div className="space-y-4 stagger-list">
-          {filtered.map((p) => {
-            const startDate = toDate(p.start_date);
-            const endDate = toDate(p.end_date);
-            const isExpanded = expanded === p.id;
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block rounded-md border border-border bg-card text-card-foreground overflow-hidden shadow-sm">
+            <div className="w-full overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40 text-muted-foreground text-left text-xs font-semibold">
+                    <th className="h-10 px-4 align-middle">Policy #</th>
+                    <th className="h-10 px-4 align-middle">Type</th>
+                    <th className="h-10 px-4 align-middle">Insurer</th>
+                    <th className="h-10 px-4 align-middle text-right">Premium</th>
+                    <th className="h-10 px-4 align-middle">Expiry</th>
+                    <th className="h-10 px-4 align-middle">Status</th>
+                    <th className="h-10 px-4 align-middle"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedPolicies.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                        {searchQuery || typeFilter !== "all" || statusFilter !== "all"
+                          ? "No policies match your filters"
+                          : "No policies yet"}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedPolicies.map((p) => {
+                      const isExpanded = expandedRow === p.id;
+                      return (
+                        <React.Fragment key={p.id}>
+                          <tr
+                            onClick={() => setExpandedRow(isExpanded ? null : p.id)}
+                            className={`border-b border-border cursor-pointer transition-colors hover:bg-muted/30 ${isExpanded ? "bg-muted/10" : ""}`}
+                          >
+                            <td className="p-4 align-middle font-mono font-medium">{p.policy_number}</td>
+                            <td className="p-4 align-middle">
+                              <span className="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold bg-transparent capitalize">
+                                {p.policy_type}
+                              </span>
+                            </td>
+                            <td className="p-4 align-middle text-muted-foreground">
+                              {p.insurer_name || "—"}
+                            </td>
+                            <td className="p-4 align-middle text-right font-mono font-medium">
+                              {formatCurrency(p.premium_amount)}
+                            </td>
+                            <td className="p-4 align-middle">
+                              {formatDate(p.end_date)}
+                            </td>
+                            <td className="p-4 align-middle">
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${STATUS_COLORS[p.status] || STATUS_COLORS.archived}`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="p-4 align-middle text-right">
+                              <button className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="border-b border-border bg-muted/10">
+                              <td colSpan={7} className="p-0">
+                                <div className="p-6 grid grid-cols-2 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                                  {/* Details */}
+                                  <div className="space-y-4 col-span-2">
+                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
+                                      <Shield className="h-4 w-4 text-primary" />
+                                      Policy Details
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <InfoRow icon={Calendar} label="Start Date" value={formatDate(p.start_date)} />
+                                      <InfoRow icon={Calendar} label="End Date" value={formatDate(p.end_date)} />
+                                      <InfoRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(p.sum_insured)} />
+                                      <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
+                                    </div>
+                                  </div>
 
-            const statusConfig: Record<string, { bg: string; text: string; border: string }> = {
-              active: { bg: "bg-[#10b981]", text: "text-white", border: "border-foreground" },
-              expired: { bg: "bg-destructive", text: "text-destructive-foreground", border: "border-foreground" },
-              cancelled: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border-strong" },
-              archived: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border-strong" },
-            };
-            const colors = statusConfig[p.status] || statusConfig.cancelled;
+                                  {/* Documents */}
+                                  <div className="space-y-4">
+                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
+                                      <FileText className="h-4 w-4 text-primary" />
+                                      Policy Document
+                                    </h4>
+                                    {p.pdf_url ? (
+                                      <div className="flex items-center justify-between rounded-md border border-border bg-card p-3 shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                          <FileText className="h-5 w-5 text-primary" />
+                                          <div>
+                                            <p className="text-sm font-medium">Policy Copy</p>
+                                            <p className="text-xs text-muted-foreground">PDF Document</p>
+                                          </div>
+                                        </div>
+                                        <a
+                                          href={p.pdf_url}
+                                          download={`Policy_${p.policy_number}.pdf`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring border border-border hover:bg-muted h-9 px-3 gap-2"
+                                        >
+                                          <Download className="h-4 w-4" />
+                                          <span className="sr-only sm:not-sr-only">Download</span>
+                                        </a>
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-md border border-border border-dashed p-4 text-center">
+                                        <p className="text-sm text-muted-foreground">No document available</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-            return (
-              <div
-                key={p.id}
-                className={`bg-card border-4 transition-all duration-300 overflow-hidden ${isExpanded ? "border-primary shadow-[8px_8px_0_var(--primary)]" : "border-foreground shadow-[4px_4px_0_var(--foreground)] hover:-translate-y-1 hover:shadow-[8px_8px_0_var(--ring)] hover:border-ring"
-                  }`}
-              >
-                <button
-                  onClick={() => setExpanded(isExpanded ? null : p.id)}
-                  className="w-full px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between text-left group gap-4 focus:outline-none focus:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-start sm:items-center gap-4">
-                    <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center border-2 transition-colors ${isExpanded ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-primary border-foreground group-hover:bg-primary group-hover:text-primary-foreground"
-                      }`}>
-                      <FileText className="h-6 w-6" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xl sm:text-2xl font-black text-foreground tracking-tighter group-hover:text-primary transition-colors">
-                        {p.policy_number}
-                      </p>
-                      <p className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-[0.15em] flex items-center gap-2">
-                        {p.policy_type}
-                        {p.insurer_name && (
-                          <>
-                            <span className="w-1.5 h-1.5 bg-foreground" />
-                            <span className="text-foreground">{p.insurer_name}</span>
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t-2 border-border sm:border-t-0 p-2 sm:p-0">
-                    <span className="text-xl sm:text-2xl font-black text-foreground tracking-tighter">
-                      <span className="text-sm">₹</span>{p.premium_amount?.toLocaleString() || "—"}
-                    </span>
-                    <span
-                      className={`ml-4 px-3 py-1 text-[10px] sm:text-xs font-black border-2 ${colors.bg} ${colors.text} ${colors.border} uppercase tracking-[0.2em] shadow-[2px_2px_0_var(--foreground)]`}
-                    >
-                      {p.status}
-                    </span>
-                  </div>
-                </button>
-
-                {/* Expanded Details - High Contrast Grid */}
-                {isExpanded && (
-                  <div className="px-4 sm:px-6 pb-6 pt-4 border-t-4 border-foreground grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 bg-muted/40 animate-in slide-in-from-top-2 fade-in duration-200">
-                    <Detail
-                      label="Start Date"
-                      value={
-                        startDate ? format(startDate, "dd MMM yyyy") : "—"
-                      }
-                    />
-                    <Detail
-                      label="End Date"
-                      value={endDate ? format(endDate, "dd MMM yyyy") : "—"}
-                    />
-                    <Detail
-                      label="Premium"
-                      value={`₹${p.premium_amount?.toLocaleString() || "—"}`}
-                      highlight
-                    />
-                    <Detail
-                      label="Sum Insured"
-                      value={
-                        p.sum_insured
-                          ? `₹${p.sum_insured.toLocaleString()}`
-                          : "—"
-                      }
-                      highlight
-                    />
-                    <Detail
-                      label="Frequency"
-                      value={p.payment_frequency || "—"}
-                    />
-                    <Detail label="Type" value={p.policy_type} />
-                  </div>
-                )}
+          {/* Mobile Cards View */}
+          <div className="md:hidden space-y-3 stagger-list">
+            {paginatedPolicies.length === 0 ? (
+              <div className="rounded-md border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                {searchQuery || typeFilter !== "all" || statusFilter !== "all"
+                  ? "No policies match your filters"
+                  : "No policies yet"}
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              paginatedPolicies.map((p) => {
+                const isExpanded = expandedRow === p.id;
+                return (
+                  <div key={p.id} className={`rounded-md border transition-all ${isExpanded ? 'border-primary shadow-sm' : 'border-border bg-card shadow-sm hover:border-primary/50'}`}>
+                    <div
+                      className="p-4 cursor-pointer"
+                      onClick={() => setExpandedRow(isExpanded ? null : p.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <p className="font-mono text-sm font-bold">{p.policy_number}</p>
+                          <p className="text-sm text-muted-foreground">{p.insurer_name || "—"}</p>
+                        </div>
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${STATUS_COLORS[p.status] || STATUS_COLORS.archived}`}>
+                          {p.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 capitalize"><Shield className="h-3 w-3" /> {p.policy_type}</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3 w-3" /> {formatCurrency(p.premium_amount)}</span>
+                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {formatDate(p.end_date)}</span>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-2 border-t border-border bg-muted/10 animate-in slide-in-from-top-1 fade-in duration-200">
+                        <div className="grid grid-cols-2 gap-4 my-4">
+                          <InfoRow icon={Calendar} label="Start Date" value={formatDate(p.start_date)} />
+                          <InfoRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(p.sum_insured)} />
+                          <div className="col-span-2">
+                            <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
+                          </div>
+                        </div>
+
+                        {p.pdf_url && (
+                          <div className="mt-4 pt-4 border-t border-border">
+                            <a
+                              href={p.pdf_url}
+                              download={`Policy_${p.policy_number}.pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 gap-2 shadow-sm"
+                            >
+                              <Download className="h-4 w-4" /> Download Policy Copy
+                            </a>
+                          </div>
+                        )}
+                        {!p.pdf_url && (
+                          <div className="mt-4 pt-4 border-t border-border">
+                            <p className="text-xs text-center text-muted-foreground">No policy document available</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 border-t border-border pt-4">
+              <p className="text-xs text-muted-foreground">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}—
+                {Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none h-8 w-8 border border-border bg-transparent"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="px-3 text-sm font-medium">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none h-8 w-8 border border-border bg-transparent"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function Detail({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+function InfoRow({ icon: Icon, label, value, capitalize }: { icon: any, label: string, value: string, capitalize?: boolean }) {
   return (
-    <div className={`flex flex-col gap-1 p-3 border-2 border-transparent transition-colors ${highlight ? 'bg-background border-border shadow-sm' : ''}`}>
-      <p className="text-[10px] sm:text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">{label}</p>
-      <p className={`font-black tracking-tight ${highlight ? 'text-primary text-lg' : 'text-foreground text-base'} uppercase`}>{value}</p>
+    <div className="flex items-start gap-2">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div>
+        <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">{label}</p>
+        <p className={`text-sm font-medium text-foreground ${capitalize ? "capitalize" : ""}`}>
+          {value}
+        </p>
+      </div>
     </div>
   );
 }

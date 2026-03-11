@@ -30,37 +30,38 @@ const STATUS_CONFIG: Record<
 > = {
   due: {
     icon: AlertTriangle,
-    bg: "bg-chart-4",
-    text: "text-foreground",
-    border: "border-foreground",
+    bg: "bg-amber-500/20",
+    text: "text-amber-700 dark:text-amber-400",
+    border: "border-amber-500/30",
     label: "Due",
   },
   contacted: {
     icon: Phone,
-    bg: "bg-muted",
-    text: "text-muted-foreground",
-    border: "border-border-strong",
+    bg: "bg-blue-500/20",
+    text: "text-blue-700 dark:text-blue-400",
+    border: "border-blue-500/30",
     label: "Contacted",
   },
   renewed: {
     icon: CheckCircle2,
-    bg: "bg-[#10b981]",
-    text: "text-white",
-    border: "border-foreground",
+    bg: "bg-green-500/20",
+    text: "text-green-700 dark:text-green-400",
+    border: "border-green-500/30",
     label: "Renewed",
   },
   lost: {
     icon: AlertTriangle,
-    bg: "bg-destructive",
-    text: "text-destructive-foreground",
-    border: "border-foreground",
+    bg: "bg-red-500/20",
+    text: "text-red-700 dark:text-red-400",
+    border: "border-red-500/30",
     label: "Lost",
   },
 };
 
 function toDate(v: Timestamp | string | undefined): Date | null {
   if (!v) return null;
-  if (v instanceof Timestamp) return v.toDate();
+  if (typeof v === 'object' && 'toDate' in v && typeof v.toDate === 'function') return v.toDate();
+  if (typeof v === 'object' && 'seconds' in v) return new Date((v as any).seconds * 1000);
   return new Date(v as string);
 }
 
@@ -103,66 +104,55 @@ export default function RenewalsPage() {
   const display = tab === "upcoming" ? upcoming : completed;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-2 relative z-10">
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter uppercase text-foreground leading-[0.9]">
-          Renewals
-        </h1>
-        <p className="text-muted-foreground font-bold text-sm sm:text-base uppercase tracking-widest max-w-2xl mt-2 border-l-4 border-primary pl-4">
-          TRACK POLICY RENEWAL DATES
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold font-mono text-foreground tracking-tight">Renewals</h1>
+        <p className="text-sm text-muted-foreground">
+          Track policy renewal dates
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 bg-muted/30 p-2 border-4 border-foreground shadow-[4px_4px_0_var(--foreground)] w-fit relative z-10">
+      <div className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full sm:w-auto">
         <button
           onClick={() => setTab("upcoming")}
-          className={`px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-black uppercase tracking-widest transition-all duration-200 border-2 ${tab === "upcoming"
-              ? "bg-primary text-primary-foreground border-foreground shadow-[4px_4px_0_var(--foreground)] translate-y-[-2px] translate-x-[-2px]"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-card hover:border-border-strong"
+          className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${tab === "upcoming" ? "bg-background text-foreground shadow-sm" : "hover:text-foreground"
             }`}
         >
           Upcoming
-          <span className={`ml-3 px-2 py-0.5 text-xs font-black border-2 ${tab === "upcoming" ? "bg-background text-foreground border-foreground shadow-[2px_2px_0_var(--foreground)]" : "bg-muted text-muted-foreground border-transparent"
-            }`}>{upcoming.length}</span>
+          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">{upcoming.length}</span>
         </button>
         <button
           onClick={() => setTab("completed")}
-          className={`px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-black uppercase tracking-widest transition-all duration-200 border-2 ${tab === "completed"
-              ? "bg-primary text-primary-foreground border-foreground shadow-[4px_4px_0_var(--foreground)] translate-y-[-2px] translate-x-[-2px]"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-card hover:border-border-strong"
+          className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${tab === "completed" ? "bg-background text-foreground shadow-sm" : "hover:text-foreground"
             }`}
         >
           Completed
-          <span className={`ml-3 px-2 py-0.5 text-xs font-black border-2 ${tab === "completed" ? "bg-background text-foreground border-foreground shadow-[2px_2px_0_var(--foreground)]" : "bg-muted text-muted-foreground border-transparent"
-            }`}>{completed.length}</span>
+          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">{completed.length}</span>
         </button>
       </div>
 
       {/* Renewals List */}
       {loading ? (
-        <div className="bg-card border-4 border-foreground p-16 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)]">
-          <div className="w-16 h-16 border-4 border-t-primary border-r-transparent border-b-foreground border-l-transparent rounded-full animate-spin" />
-          <p className="text-foreground font-black uppercase tracking-[0.2em]">Loading renewals...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 w-full rounded-md skeleton" />
+          ))}
         </div>
       ) : display.length === 0 ? (
-        <div className="bg-striped border-4 border-foreground p-12 sm:p-20 flex flex-col items-center justify-center gap-6 shadow-[8px_8px_0_var(--foreground)] relative overflow-hidden">
-          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-primary flex items-center justify-center mb-4 shadow-[8px_8px_0_var(--foreground)] border-4 border-foreground relative z-10 animate-in zoom-in duration-700">
-            <CalendarClock className="h-12 w-12 sm:h-16 sm:w-16 text-primary-foreground" />
-          </div>
-          <p className="text-foreground font-black text-3xl sm:text-4xl tracking-tighter uppercase relative z-10 text-center bg-card px-4 border-2 border-foreground">
-            {tab === "upcoming"
-              ? "You're all caught up!"
-              : "No completed renewals yet."}
+        <div className="rounded-md border border-border bg-card p-12 flex flex-col items-center text-center shadow-sm">
+          <CalendarClock className="h-12 w-12 text-muted mb-4" />
+          <p className="text-lg font-medium text-foreground">
+            {tab === "upcoming" ? "You're all caught up!" : "No completed renewals yet."}
           </p>
-          <p className="text-muted-foreground font-bold text-sm sm:text-base tracking-wider uppercase text-center max-w-md relative z-10 bg-card p-4 border-2 border-border-strong">
+          <p className="text-sm text-muted-foreground">
             {tab === "upcoming"
               ? "No upcoming renewals at this time."
               : "Completed renewals will appear here."}
           </p>
         </div>
       ) : (
-        <div className="space-y-4 stagger-list">
+        <div className="grid gap-4 sm:grid-cols-2">
           {display.map((r) => {
             const dueDate = toDate(r.due_date);
             const config = STATUS_CONFIG[r.status] || STATUS_CONFIG.due;
@@ -174,55 +164,48 @@ export default function RenewalsPage() {
             return (
               <div
                 key={r.id}
-                className="bg-card border-4 border-foreground p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[4px_4px_0_var(--foreground)] hover:-translate-y-1 hover:shadow-[8px_8px_0_var(--ring)] hover:border-ring transition-all duration-300 relative overflow-hidden group"
+                className="rounded-md border border-border bg-card p-5 flex flex-col gap-4 shadow-sm hover:border-primary/50 transition-colors"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-muted/20 rotate-45 translate-x-16 -translate-y-16 group-hover:bg-primary/5 transition-colors duration-500" />
-
-                <div className="flex items-start sm:items-center gap-4 relative z-10">
-                  <div
-                    className={`w-14 h-14 flex-shrink-0 flex items-center justify-center border-2 shadow-[2px_2px_0_var(--foreground)] ${config.bg} ${config.border} transition-colors group-hover:border-primary`}
-                  >
-                    <Icon className={`h-6 w-6 ${config.text}`} />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xl sm:text-2xl font-black text-foreground tracking-tighter group-hover:text-primary transition-colors uppercase">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="font-mono text-lg font-bold">
                       {r.policy_number || r.policy_id}
                     </p>
-                    <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em] flex flex-wrap items-center gap-2">
-                      <span className="flex items-center gap-1">
-                        <CalendarClock className="w-3 h-3" />
-                        DUE: {dueDate ? format(dueDate, "dd MMM yyyy") : "—"}
-                      </span>
-                      {daysLeft !== null && r.status !== "renewed" && (
-                        <>
-                          <span className="w-1.5 h-1.5 bg-foreground" />
-                          <span
-                            className={`px-2 py-0.5 border-2 ${daysLeft < 0
-                                ? "bg-destructive text-destructive-foreground border-foreground"
-                                : daysLeft <= 7
-                                  ? "bg-chart-4 text-foreground border-foreground"
-                                  : "bg-muted text-muted-foreground border-border-strong"
-                              } shadow-[2px_2px_0_var(--foreground)]`}
-                          >
-                            {daysLeft < 0
-                              ? `${Math.abs(daysLeft)} DAYS OVERDUE`
-                              : daysLeft === 0
-                                ? "DUE TODAY"
-                                : `${daysLeft} DAYS LEFT`}
-                          </span>
-                        </>
-                      )}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CalendarClock className="w-4 h-4" />
+                      Due: {dueDate ? format(dueDate, "dd MMM yyyy") : "—"}
                     </div>
-                    {r.notes && (
-                      <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-bold italic border-l-2 border-primary pl-2">{r.notes}</p>
-                    )}
                   </div>
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase ${config.bg} ${config.text} ${config.border}`}>
+                    <Icon className="w-3 h-3 mr-1" />
+                    {config.label}
+                  </span>
                 </div>
-                <span
-                  className={`relative z-10 self-start sm:self-center px-4 py-2 text-[10px] sm:text-xs font-black border-2 shadow-[2px_2px_0_var(--foreground)] ${config.bg} ${config.text} ${config.border} uppercase tracking-[0.2em]`}
-                >
-                  {config.label}
-                </span>
+
+                {daysLeft !== null && r.status !== "renewed" && (
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${daysLeft < 0
+                          ? "bg-destructive/10 text-destructive"
+                          : daysLeft <= 7
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                    >
+                      {daysLeft < 0
+                        ? `${Math.abs(daysLeft)} Days Overdue`
+                        : daysLeft === 0
+                          ? "Due Today"
+                          : `${daysLeft} Days Left`}
+                    </span>
+                  </div>
+                )}
+
+                {r.notes && (
+                  <div className="mt-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md border-l-2 border-primary">
+                    <p className="italic">{r.notes}</p>
+                  </div>
+                )}
               </div>
             );
           })}
