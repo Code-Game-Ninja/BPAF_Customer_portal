@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { supabaseAdmin } from "@/lib/supabase/server";
 import { generatePassword } from "@/lib/utils";
 import { sendPasswordReset } from "@/lib/email";
 
@@ -19,37 +19,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    // Find the Firebase Auth user
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-    let userRecord;
-    try {
-      userRecord = await adminAuth.getUserByEmail(email);
-    } catch {
-      return NextResponse.json({ error: "No account found" }, { status: 404 });
-    }
+    // Verify this is a valid portal customer
+    const { data: portalData, error: portalError } = await supabaseAdmin
+      .from("customer_portal_users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-    // Verify this is a customer
-    const portalSnap = await adminDb
-      .collection("customer_portal_users")
-      .doc(userRecord.uid)
-      .get();
-
-    if (!portalSnap.exists) {
+    if (portalError || !portalData) {
       return NextResponse.json({ error: "No portal account found" }, { status: 404 });
     }
 
-    const portalData = portalSnap.data()!;
     const newPassword = generatePassword(10);
 
-    // Update password in Firebase Auth
-    await adminAuth.updateUser(userRecord.uid, { password: newPassword });
+    // Update password in Supabase Auth
+    const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
+      portalData.auth_user_id,
+      { password: newPassword }
+    );
+    
+    if (updateAuthError) {
+      throw updateAuthError;
+    }
 
-    // Update Firestore record
-    await adminDb.collection("customer_portal_users").doc(userRecord.uid).update({
-      first_login: false,
-      updated_at: new Date().toISOString(),
-    });
+    // Update DB record
+    const { error: dbUpdateError } = await supabaseAdmin
+      .from("customer_portal_users")
+      .update({
+        portal_password: newPassword,
+        first_login: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("auth_user_id", portalData.auth_user_id);
+      
+    if (dbUpdateError) {
+       throw dbUpdateError;
+    }
 
     // Send email
     const portalUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";

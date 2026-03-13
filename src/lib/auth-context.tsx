@@ -1,23 +1,10 @@
 "use client";
 
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
+  createContext, useContext, useEffect, useState, ReactNode,
 } from "react";
-import {
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  type User,
-} from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase/client";
+import { type User, type AuthChangeEvent, type Session } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase/client";
 
 export interface CustomerUser {
   uid: string;
@@ -30,7 +17,7 @@ export interface CustomerUser {
 }
 
 interface AuthContextType {
-  firebaseUser: User | null;
+  user: User | null;
   customer: CustomerUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -39,90 +26,127 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({
-  firebaseUser: null,
-  customer: null,
-  loading: true,
-  signIn: async () => {},
-  signOut: async () => {},
-  changePassword: async () => {},
+  user: null, customer: null, loading: true,
+  signIn: async () => {}, signOut: async () => {}, changePassword: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [customer, setCustomer] = useState<CustomerUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        // Fetch customer portal profile from Firestore
-        try {
-          const snap = await getDoc(doc(db, "customer_portal_users", user.uid));
-          if (snap.exists()) {
-            const data = snap.data();
-            setCustomer({
-              uid: user.uid,
-              customer_id: data.customer_id,
-              name: data.name,
-              email: data.email,
-              phone: data.phone || "",
-              is_active: data.is_active ?? true,
-              first_login: data.first_login ?? false,
-            });
-          } else {
-            // Not a customer portal user — sign out
-            setCustomer(null);
-            await firebaseSignOut(auth);
-          }
-        } catch (err) {
-          console.error("[auth] Failed to load customer profile:", err);
+    // Check active session on mount
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+          await fetchCustomerProfile(session.user.id);
+        } else {
+          setUser(null);
           setCustomer(null);
         }
-      } else {
-        setCustomer(null);
+      } catch (err) {
+        console.error("[auth] Initialization error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
+    };
+    
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      
+      if (currentUser && event === 'SIGNED_IN') {
+        // We only fetch on SIGNED_IN. Session initialize covers the initial load.
+        setLoading(true);
+        await fetchCustomerProfile(currentUser.id);
+        setLoading(false);
+      } else if (!currentUser) {
+        setCustomer(null);
+        setLoading(false);
+      }
     });
-    return () => unsub();
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fetchCustomerProfile = async (authUserId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("customer_portal_users")
+        .select("*")
+        .eq("auth_user_id", authUserId)
+        .single();
+        
+      if (error || !data) {
+        setCustomer(null);
+        await supabase.auth.signOut();
+        return;
+      }
+      
+      setCustomer({
+        uid: authUserId,
+        customer_id: data.customer_id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone || "",
+        is_active: data.is_active ?? true,
+        first_login: data.first_login ?? false,
+      });
+    } catch (err) {
+      console.error("[auth] Failed to load customer profile:", err);
+      setCustomer(null);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    // Verify this is a customer
-    const snap = await getDoc(doc(db, "customer_portal_users", cred.user.uid));
-    if (!snap.exists()) {
-      await firebaseSignOut(auth);
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError || !authData.user) {
+      throw new Error(authError?.message || "Invalid login credentials.");
+    }
+    
+    const { data, error } = await supabase
+      .from("customer_portal_users")
+      .select("*")
+      .eq("auth_user_id", authData.user.id)
+      .single();
+      
+    if (error || !data) {
+      await supabase.auth.signOut();
       throw new Error("This account is not registered as a customer portal user.");
     }
-    if (!snap.data().is_active) {
-      await firebaseSignOut(auth);
+    
+    if (!data.is_active) {
+      await supabase.auth.signOut();
       throw new Error("Your account has been deactivated. Contact support.");
     }
   };
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
-    setCustomer(null);
-    setFirebaseUser(null);
+    await supabase.auth.signOut();
+    setCustomer(null); 
+    setUser(null);
   };
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
-    if (!firebaseUser || !firebaseUser.email) throw new Error("Not authenticated");
-    const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
-    await reauthenticateWithCredential(firebaseUser, credential);
-    await updatePassword(firebaseUser, newPassword);
+    if (!user || !user.email) throw new Error("Not authenticated");
+    
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      throw new Error(error.message);
+    }
   };
 
   return (
-    <AuthContext.Provider
-      value={{ firebaseUser, customer, loading, signIn, signOut, changePassword }}
-    >
+    <AuthContext.Provider value={{ user, customer, loading, signIn, signOut, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export function useAuth() { return useContext(AuthContext); }

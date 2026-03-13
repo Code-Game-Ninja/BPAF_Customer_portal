@@ -1,8 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { supabase } from "@/lib/supabase/client";
 import { FileText, AlertTriangle, CheckCircle, Clock, ShieldCheck, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -20,14 +19,13 @@ interface Policy {
 }
 
 const fetchPolicies = async (customerId: string) => {
-  const snap = await getDocs(
-    query(
-      collection(db, "policies"),
-      where("customer_id", "==", customerId),
-      orderBy("createdAt", "desc")
-    )
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as unknown as Policy));
+  const { data, error } = await supabase
+    .from("policies")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as Policy[];
 };
 
 export default function DashboardPage() {

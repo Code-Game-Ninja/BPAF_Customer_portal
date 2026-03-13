@@ -52,3 +52,5 @@ next-env.d.ts
 # Antigravity/AI Agent
 .agent/
 .gent/
+
+.vercel

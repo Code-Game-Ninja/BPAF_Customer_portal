@@ -2,15 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { supabase } from "@/lib/supabase/client";
 import {
   Search,
   Filter,
@@ -33,8 +25,8 @@ interface Policy {
   policy_number: string;
   policy_type: string;
   status: string;
-  start_date: Timestamp | string;
-  end_date: Timestamp | string;
+  start_date: string;
+  end_date: string;
   premium_amount: number;
   sum_insured?: number;
   insurer_name?: string;
@@ -52,14 +44,12 @@ const STATUS_COLORS: Record<string, string> = {
   archived: "bg-muted-foreground/20 text-muted-foreground border-muted-foreground/30",
 };
 
-function toDate(v: Timestamp | string | undefined): Date | null {
+function toDate(v: string | undefined): Date | null {
   if (!v) return null;
-  if (typeof v === 'object' && 'toDate' in v && typeof v.toDate === 'function') return v.toDate();
-  if (typeof v === 'object' && 'seconds' in v) return new Date((v as any).seconds * 1000);
-  return new Date(v as string);
+  return new Date(v);
 }
 
-function formatDate(v: Timestamp | string | undefined): string {
+function formatDate(v: string | undefined): string {
   const d = toDate(v);
   if (!d) return "—";
   return format(d, "dd MMM yyyy");
@@ -84,16 +74,13 @@ export default function PoliciesPage() {
     if (!customer?.customer_id) return;
     (async () => {
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, "policies"),
-            where("customer_id", "==", customer.customer_id),
-            orderBy("createdAt", "desc")
-          )
-        );
-        setPolicies(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() } as unknown as Policy))
-        );
+        const { data, error } = await supabase
+          .from("policies")
+          .select("*")
+          .eq("customer_id", customer.customer_id)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        setPolicies((data ?? []) as unknown as Policy[]);
       } catch (err) {
         console.error("Failed to load policies:", err);
       } finally {

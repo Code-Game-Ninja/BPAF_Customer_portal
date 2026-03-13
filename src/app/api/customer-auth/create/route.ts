@@ -2,8 +2,8 @@
  * POST /api/customer-auth/create
  *
  * Called from the admin portal when a customer is created.
- * 1. Creates a Firebase Auth user with email + auto-generated password
- * 2. Stores portal credentials in Firestore `customer_portal_users` collection
+ * 1. Creates a Supabase Auth user with email + auto-generated password
+ * 2. Stores portal credentials in `customer_portal_users` table
  * 3. Sends login credentials to the customer via email (Nodemailer)
  *
  * Body: { customerId, name, email, phone }
@@ -11,13 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { supabaseAdmin } from "@/lib/supabase/server";
 import { generatePassword } from "@/lib/utils";
 import { sendCustomerCredentials } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
-    // Validate API key (shared secret between admin and customer portals)
     const apiKey = req.headers.get("x-api-key");
     if (!apiKey || apiKey !== process.env.PORTAL_API_KEY) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,15 +33,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if portal user already exists for this customer
-    const adminDb = getAdminDb();
-    const adminAuth = getAdminAuth();
-    const existingSnap = await adminDb
-      .collection("customer_portal_users")
-      .where("customer_id", "==", customerId)
+    const { data: existingSnap } = await supabaseAdmin
+      .from("customer_portal_users")
+      .select("*")
+      .eq("customer_id", customerId)
       .limit(1)
-      .get();
+      .single();
 
-    if (!existingSnap.empty) {
+    if (existingSnap) {
       return NextResponse.json(
         { error: "Portal account already exists for this customer", existing: true },
         { status: 409 }
@@ -52,56 +50,50 @@ export async function POST(req: NextRequest) {
     // Generate a random password
     const plainPassword = generatePassword(10);
 
-    // Create Firebase Auth user with custom claim role=customer
-    let firebaseUid: string;
-    try {
-      const userRecord = await adminAuth.createUser({
-        email,
-        password: plainPassword,
-        displayName: name,
-        disabled: false,
-      });
-      firebaseUid = userRecord.uid;
+    // Create Auth user
+    let authUserResponse = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: plainPassword,
+      email_confirm: true,
+      user_metadata: { name, role: "customer", customer_id: customerId },
+    });
 
-      // Set custom claim so Firestore rules can identify customers and their assigned ID
-      await adminAuth.setCustomUserClaims(firebaseUid, { 
-        role: "customer",
-        customer_id: customerId 
-      });
-    } catch (authErr: unknown) {
-      // If user already exists in Auth, use the existing UID
-      if (
-        typeof authErr === "object" &&
-        authErr !== null &&
-        "code" in authErr &&
-        (authErr as { code: string }).code === "auth/email-already-exists"
-      ) {
-        const existing = await adminAuth.getUserByEmail(email);
-        firebaseUid = existing.uid;
-        // Update password for re-sends
-        await adminAuth.updateUser(firebaseUid, { password: plainPassword });
-        await adminAuth.setCustomUserClaims(firebaseUid, { 
-          role: "customer",
-          customer_id: customerId 
+    let authUserId: string;
+
+    if (authUserResponse.error) {
+      if (authUserResponse.error.message.includes("already exists") || authUserResponse.error.code === "user_already_exists") {
+        const listRes = await supabaseAdmin.auth.admin.listUsers();
+        const existing = listRes.data.users.find(u => u.email === email);
+        if (!existing) {
+          throw new Error("User exists but could not be found in list");
+        }
+        authUserId = existing.id;
+        await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+          password: plainPassword,
+          user_metadata: { name, role: "customer", customer_id: customerId }
         });
       } else {
-        throw authErr;
+        throw authUserResponse.error;
       }
+    } else {
+       authUserId = authUserResponse.data.user.id;
     }
 
-    // Store portal user mapping in Firestore
-    const now = new Date().toISOString();
-    await adminDb.collection("customer_portal_users").doc(firebaseUid).set({
+    // Store portal user mapping
+    const { error: insertError } = await supabaseAdmin.from("customer_portal_users").insert({
       customer_id: customerId,
-      firebase_uid: firebaseUid,
+      auth_user_id: authUserId,
       name,
       email,
       phone: phone || "",
+      portal_password: plainPassword,
       is_active: true,
       first_login: false,
-      created_at: now,
-      updated_at: now,
     });
+    
+    if (insertError) {
+      throw insertError;
+    }
 
     // Send credentials email
     const portalUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
@@ -111,7 +103,6 @@ export async function POST(req: NextRequest) {
       emailSent = true;
     } catch (emailErr) {
       console.error("[customer-auth] Email send failed:", emailErr);
-      // We don't fail the request, but we report it in the response
     }
 
     return NextResponse.json({
@@ -119,7 +110,7 @@ export async function POST(req: NextRequest) {
       message: emailSent 
         ? `Portal account created and credentials sent to ${email}`
         : `Portal account created, but failed to send credentials email to ${email}.`,
-      firebase_uid: firebaseUid,
+      auth_user_id: authUserId,
       email_sent: emailSent
     });
   } catch (err) {

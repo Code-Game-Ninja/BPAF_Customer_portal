@@ -2,8 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { User, Lock, MapPin, Phone, Mail, Eye, EyeOff } from "lucide-react";
 
@@ -35,9 +34,13 @@ export default function ProfilePage() {
     if (!customer?.customer_id) return;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, "customers", customer.customer_id));
-        if (snap.exists()) {
-          setInfo(snap.data() as CustomerInfo);
+        const { data, error } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("id", customer.customer_id)
+          .single();
+        if (data) {
+          setInfo(data as CustomerInfo);
         }
       } catch (err) {
         console.error("Failed to load profile:", err);

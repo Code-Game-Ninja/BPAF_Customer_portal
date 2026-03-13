@@ -2,15 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { supabase } from "@/lib/supabase/client";
 import { CalendarClock, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -19,8 +11,8 @@ interface Renewal {
   policy_id: string;
   policy_number?: string;
   status: string; // due | contacted | renewed | lost
-  due_date: Timestamp | string;
-  renewed_date?: Timestamp | string;
+  due_date: string;
+  renewed_date?: string;
   notes?: string;
 }
 
@@ -58,11 +50,9 @@ const STATUS_CONFIG: Record<
   },
 };
 
-function toDate(v: Timestamp | string | undefined): Date | null {
+function toDate(v: string | undefined): Date | null {
   if (!v) return null;
-  if (typeof v === 'object' && 'toDate' in v && typeof v.toDate === 'function') return v.toDate();
-  if (typeof v === 'object' && 'seconds' in v) return new Date((v as any).seconds * 1000);
-  return new Date(v as string);
+  return new Date(v);
 }
 
 export default function RenewalsPage() {
@@ -75,18 +65,13 @@ export default function RenewalsPage() {
     if (!customer?.customer_id) return;
     (async () => {
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, "renewals"),
-            where("customer_id", "==", customer.customer_id),
-            orderBy("due_date", "asc")
-          )
-        );
-        setRenewals(
-          snap.docs.map(
-            (d) => ({ id: d.id, ...d.data() } as unknown as Renewal)
-          )
-        );
+        const { data, error } = await supabase
+          .from("renewals")
+          .select("*")
+          .eq("customer_id", customer.customer_id)
+          .order("due_date", { ascending: true });
+        if (error) throw error;
+        setRenewals((data ?? []) as unknown as Renewal[]);
       } catch (err) {
         console.error("Failed to load renewals:", err);
       } finally {
