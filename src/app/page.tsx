@@ -23,13 +23,16 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+
+    if (!normalizedEmail || !normalizedPassword) {
       toast.error("Please enter your email and password");
       return;
     }
     setSubmitting(true);
     try {
-      await signIn(email, password);
+      await signIn(normalizedEmail, normalizedPassword);
       toast.success("Welcome back!");
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -42,7 +45,9 @@ export default function LoginPage() {
   };
 
   const handleForgotPassword = async () => {
-    if (!email) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       toast.error("Please enter your email first");
       return;
     }
@@ -50,7 +55,7 @@ export default function LoginPage() {
       const res = await fetch("/api/customer-auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
       if (res.ok) {
         toast.success("Password reset email sent. Check your inbox.");

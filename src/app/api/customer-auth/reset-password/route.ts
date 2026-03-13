@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { email } = body;
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
-    if (!email) {
+    if (!normalizedEmail) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     const { data: portalData, error: portalError } = await supabaseAdmin
       .from("customer_portal_users")
       .select("*")
-      .eq("email", email)
+      .eq("email", normalizedEmail)
       .single();
 
     if (portalError || !portalData) {
@@ -59,14 +60,14 @@ export async function POST(req: NextRequest) {
     // Send email
     const portalUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
     try {
-      await sendPasswordReset(email, portalData.name, newPassword, portalUrl);
+      await sendPasswordReset(normalizedEmail, portalData.name, newPassword, portalUrl);
     } catch (emailErr) {
       console.error("[reset-password] Email send failed:", emailErr);
     }
 
     return NextResponse.json({
       success: true,
-      message: `Password reset and sent to ${email}`,
+      message: `Password reset and sent to ${normalizedEmail}`,
     });
   } catch (err) {
     console.error("[customer-auth/reset-password] Error:", err);

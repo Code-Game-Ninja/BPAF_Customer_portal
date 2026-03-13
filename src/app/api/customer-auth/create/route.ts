@@ -24,8 +24,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { customerId, name, email, phone } = body;
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
-    if (!customerId || !name || !email) {
+    if (!customerId || !name || !normalizedEmail) {
       return NextResponse.json(
         { error: "Missing required fields: customerId, name, email" },
         { status: 400 }
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     // Create Auth user
     let authUserResponse = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password: plainPassword,
       email_confirm: true,
       user_metadata: { name, role: "customer", customer_id: customerId },
@@ -63,7 +64,9 @@ export async function POST(req: NextRequest) {
     if (authUserResponse.error) {
       if (authUserResponse.error.message.includes("already exists") || authUserResponse.error.code === "user_already_exists") {
         const listRes = await supabaseAdmin.auth.admin.listUsers();
-        const existing = listRes.data.users.find(u => u.email === email);
+        const existing = listRes.data.users.find(
+          (u) => (u.email || "").toLowerCase() === normalizedEmail
+        );
         if (!existing) {
           throw new Error("User exists but could not be found in list");
         }
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
       customer_id: customerId,
       auth_user_id: authUserId,
       name,
-      email,
+      email: normalizedEmail,
       phone: phone || "",
       portal_password: plainPassword,
       is_active: true,
@@ -99,7 +102,7 @@ export async function POST(req: NextRequest) {
     const portalUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
     let emailSent = false;
     try {
-      await sendCustomerCredentials(email, name, plainPassword, portalUrl);
+      await sendCustomerCredentials(normalizedEmail, name, plainPassword, portalUrl);
       emailSent = true;
     } catch (emailErr) {
       console.error("[customer-auth] Email send failed:", emailErr);
@@ -108,8 +111,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: emailSent 
-        ? `Portal account created and credentials sent to ${email}`
-        : `Portal account created, but failed to send credentials email to ${email}.`,
+        ? `Portal account created and credentials sent to ${normalizedEmail}`
+        : `Portal account created, but failed to send credentials email to ${normalizedEmail}.`,
       auth_user_id: authUserId,
       email_sent: emailSent
     });

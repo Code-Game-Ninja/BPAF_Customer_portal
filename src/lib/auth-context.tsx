@@ -105,8 +105,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+
+    if (!normalizedEmail || !normalizedPassword) {
+      throw new Error("Please enter both email and password.");
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: normalizedPassword,
+    });
     if (authError || !authData.user) {
+      const authCode = authError?.code;
+      if (authCode === "email_not_confirmed") {
+        throw new Error("Email is not confirmed. Please contact support.");
+      }
+      if (authCode === "invalid_credentials") {
+        throw new Error("Invalid email or password.");
+      }
       throw new Error(authError?.message || "Invalid login credentials.");
     }
     
