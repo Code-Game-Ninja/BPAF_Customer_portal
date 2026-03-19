@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase/client";
-import { FileText, AlertTriangle, CheckCircle, Clock, ShieldCheck, ArrowRight } from "lucide-react";
+import { FileText, AlertTriangle, CheckCircle, Clock, ShieldCheck, ArrowRight, XCircle, User, Phone, Mail } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import useSWR from "swr";
@@ -15,13 +15,28 @@ interface Policy {
   start_date: string;
   end_date: string;
   premium_amount: number;
-  insurer?: string;
+  insurer_name?: string;
+  assigned_to_name?: string;
+  agent?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 const fetchPolicies = async (customerId: string) => {
   const { data, error } = await supabase
     .from("policies")
-    .select("*")
+    .select(`
+      *,
+      agent:users!assigned_to (
+        id,
+        name,
+        email,
+        phone
+      )
+    `)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -41,6 +56,7 @@ export default function DashboardPage() {
 
   const loading = authLoading || dataLoading;
   const activePolicies = policies?.filter((p) => p.status === "active") || [];
+  const expiredPolicies = policies?.filter((p) => p.status === "expired") || [];
   const expiringSoon = policies?.filter((p) => {
     if (p.status !== "active") return false;
     const daysLeft = Math.ceil(
@@ -48,6 +64,14 @@ export default function DashboardPage() {
     );
     return daysLeft >= 0 && daysLeft <= 30;
   }) || [];
+
+  // Get unique agents from all policies
+  const uniqueAgents = policies?.reduce((acc, p) => {
+    if (p.agent && !acc.find((a) => a.id === p.agent?.id)) {
+      acc.push(p.agent);
+    }
+    return acc;
+  }, [] as NonNullable<Policy["agent"]>[]) || [];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -85,11 +109,11 @@ export default function DashboardPage() {
           iconColor="text-amber-500"
         />
         <StatCard
-          icon={Clock}
-          label="Expired / Other"
-          value={(policies?.length || 0) - activePolicies.length}
+          icon={XCircle}
+          label="Expired"
+          value={expiredPolicies.length}
           loading={loading}
-          iconColor="text-muted-foreground"
+          iconColor="text-red-500"
         />
       </div>
 
@@ -127,6 +151,91 @@ export default function DashboardPage() {
                   <span className="inline-flex items-center rounded-md bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                     Expires {format(new Date(p.end_date), "MMM dd, yyyy")}
                   </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Expired Policies Alert */}
+      {expiredPolicies.length > 0 && (
+        <div className="rounded-md border border-red-500/50 bg-red-500/10 p-6 shadow-sm">
+          <h3 className="text-base font-bold flex items-center gap-2 mb-4 text-red-700 dark:text-red-400">
+            <XCircle className="h-5 w-5" />
+            Expired Policies ({expiredPolicies.length})
+          </h3>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {expiredPolicies.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-4 rounded-md border border-red-500/30 bg-background p-4 shadow-sm"
+              >
+                <div>
+                  <p className="font-mono text-lg font-bold text-foreground">
+                    {p.policy_number}
+                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {p.policy_type}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="inline-flex items-center rounded-md bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:text-red-400">
+                    Expired {format(new Date(p.end_date), "MMM dd, yyyy")}
+                  </span>
+                  {p.agent && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Contact: {p.agent.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-red-700 dark:text-red-400 mt-4">
+            Contact your agent to renew these policies.
+          </p>
+        </div>
+      )}
+
+      {/* Your Agents Section */}
+      {uniqueAgents.length > 0 && (
+        <div className="rounded-md border border-border bg-card p-6 shadow-sm">
+          <h3 className="text-base font-bold flex items-center gap-2 mb-4 text-foreground">
+            <User className="h-5 w-5 text-primary" />
+            Your Insurance Advisors
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Contact your agent for policy queries, renewals, or claims assistance.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {uniqueAgents.map((agent) => (
+              <div
+                key={agent.id}
+                className="rounded-md border border-border bg-muted/30 p-4"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{agent.name}</p>
+                    <p className="text-xs text-muted-foreground">Insurance Advisor</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-3 border-t border-border">
+                  {agent.phone && (
+                    <a href={`tel:${agent.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                      <Phone className="h-4 w-4" />
+                      {agent.phone}
+                    </a>
+                  )}
+                  <a href={`mailto:${agent.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                    <Mail className="h-4 w-4" />
+                    {agent.email}
+                  </a>
                 </div>
               </div>
             ))}
@@ -176,8 +285,13 @@ export default function DashboardPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     <span className="capitalize">{p.policy_type}</span>
-                    {p.insurer && ` • ${p.insurer}`}
+                    {p.insurer_name && ` • ${p.insurer_name}`}
                   </p>
+                  {p.agent && (
+                    <p className="text-xs text-muted-foreground">
+                      Agent: {p.agent.name}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground mb-1">Premium</p>

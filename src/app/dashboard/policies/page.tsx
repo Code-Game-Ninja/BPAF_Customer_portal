@@ -17,6 +17,9 @@ import {
   Clock,
   Download,
   Eye,
+  User,
+  Phone,
+  Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -33,6 +36,15 @@ interface Policy {
   payment_frequency?: string;
   customer_name?: string;
   pdf_url?: string;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  // Agent details from joined users table
+  agent?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 const PAGE_SIZE = 20;
@@ -74,9 +86,18 @@ export default function PoliciesPage() {
     if (!customer?.customer_id) return;
     (async () => {
       try {
+        // Fetch policies with agent details
         const { data, error } = await supabase
           .from("policies")
-          .select("*")
+          .select(`
+            *,
+            agent:users!assigned_to (
+              id,
+              name,
+              email,
+              phone
+            )
+          `)
           .eq("customer_id", customer.customer_id)
           .order("created_at", { ascending: false });
         if (error) throw error;
@@ -265,7 +286,7 @@ export default function PoliciesPage() {
                               <td colSpan={7} className="p-0">
                                 <div className="p-6 grid grid-cols-2 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2 fade-in duration-200">
                                   {/* Details */}
-                                  <div className="space-y-4 col-span-2">
+                                  <div className="space-y-4">
                                     <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
                                       <Shield className="h-4 w-4 text-primary" />
                                       Policy Details
@@ -276,6 +297,43 @@ export default function PoliciesPage() {
                                       <InfoRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(p.sum_insured)} />
                                       <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
                                     </div>
+                                  </div>
+
+                                  {/* Your Agent */}
+                                  <div className="space-y-4">
+                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
+                                      <User className="h-4 w-4 text-primary" />
+                                      Your Agent
+                                    </h4>
+                                    {p.agent ? (
+                                      <div className="space-y-3 rounded-md border border-border bg-card p-4">
+                                        <div className="flex items-center gap-3">
+                                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <User className="h-5 w-5 text-primary" />
+                                          </div>
+                                          <div>
+                                            <p className="font-semibold text-sm">{p.agent.name}</p>
+                                            <p className="text-xs text-muted-foreground">Insurance Advisor</p>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2 pt-2 border-t border-border">
+                                          {p.agent.phone && (
+                                            <a href={`tel:${p.agent.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                              <Phone className="h-4 w-4" />
+                                              {p.agent.phone}
+                                            </a>
+                                          )}
+                                          <a href={`mailto:${p.agent.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                            <Mail className="h-4 w-4" />
+                                            {p.agent.email}
+                                          </a>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-md border border-border border-dashed p-4 text-center">
+                                        <p className="text-sm text-muted-foreground">Agent info not available</p>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* Documents */}
@@ -365,6 +423,31 @@ export default function PoliciesPage() {
                             <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
                           </div>
                         </div>
+
+                        {/* Agent Contact - Mobile */}
+                        {p.agent && (
+                          <div className="mt-4 pt-4 border-t border-border">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Your Agent</h4>
+                            <div className="rounded-md border border-border bg-card p-3 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <User className="h-4 w-4 text-primary" />
+                                </div>
+                                <p className="font-semibold text-sm">{p.agent.name}</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                                {p.agent.phone && (
+                                  <a href={`tel:${p.agent.phone}`} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground h-8 px-3">
+                                    <Phone className="h-3.5 w-3.5" /> Call
+                                  </a>
+                                )}
+                                <a href={`mailto:${p.agent.email}`} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium border border-border bg-card h-8 px-3">
+                                  <Mail className="h-3.5 w-3.5" /> Email
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {p.pdf_url && (
                           <div className="mt-4 pt-4 border-t border-border">
