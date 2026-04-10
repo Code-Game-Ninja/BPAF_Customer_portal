@@ -56,15 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      
-      if (currentUser && event === 'SIGNED_IN') {
-        // We only fetch on SIGNED_IN. Session initialize covers the initial load.
+
+      if (currentUser && event === "SIGNED_IN") {
+        // Keep auth callback synchronous; do async profile work after lock release.
         setLoading(true);
-        await fetchCustomerProfile(currentUser.id);
-        setLoading(false);
+        void Promise.resolve().then(async () => {
+          await fetchCustomerProfile(currentUser.id);
+          setLoading(false);
+        });
       } else if (!currentUser) {
         setCustomer(null);
         setLoading(false);
@@ -72,16 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchCustomerProfile = async (authUserId: string) => {
     try {
       const { data, error } = await supabase
         .from("customer_portal_users")
-        .select("*")
+        .select("auth_user_id, customer_id, name, email, phone, is_active, first_login")
         .eq("auth_user_id", authUserId)
-        .single();
+        .maybeSingle();
         
       if (error || !data) {
         setCustomer(null);
@@ -129,9 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const { data, error } = await supabase
       .from("customer_portal_users")
-      .select("*")
+      .select("auth_user_id, is_active")
       .eq("auth_user_id", authData.user.id)
-      .single();
+      .maybeSingle();
       
     if (error || !data) {
       await supabase.auth.signOut();

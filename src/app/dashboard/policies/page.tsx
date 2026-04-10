@@ -1,25 +1,23 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import React, { useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import {
-  Search,
-  Filter,
-  AlertCircle,
-  Shield,
   Calendar,
-  IndianRupee,
-  Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  FileText,
-  Clock,
   Download,
   Eye,
-  User,
-  Phone,
+  FileText,
+  Filter,
+  IndianRupee,
   Mail,
+  Phone,
+  Search,
+  Shield,
+  User,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -34,11 +32,7 @@ interface Policy {
   sum_insured?: number;
   insurer_name?: string;
   payment_frequency?: string;
-  customer_name?: string;
   pdf_url?: string;
-  assigned_to?: string;
-  assigned_to_name?: string;
-  // Agent details from joined users table
   agent?: {
     id: string;
     name: string;
@@ -49,28 +43,12 @@ interface Policy {
 
 const PAGE_SIZE = 20;
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30",
-  expired: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30",
-  cancelled: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-  archived: "bg-muted-foreground/20 text-muted-foreground border-muted-foreground/30",
+const STATUS_STYLE: Record<string, string> = {
+  active: "border-green-200 bg-green-100 text-green-700",
+  expired: "border-rose-200 bg-rose-100 text-rose-700",
+  cancelled: "border-amber-200 bg-amber-100 text-amber-700",
+  archived: "border-slate-200 bg-slate-100 text-slate-700",
 };
-
-function toDate(v: string | undefined): Date | null {
-  if (!v) return null;
-  return new Date(v);
-}
-
-function formatDate(v: string | undefined): string {
-  const d = toDate(v);
-  if (!d) return "—";
-  return format(d, "dd MMM yyyy");
-}
-
-function formatCurrency(val: number | undefined) {
-  if (val === undefined || val === null) return "—";
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-}
 
 export default function PoliciesPage() {
   const { customer } = useAuth();
@@ -84,12 +62,13 @@ export default function PoliciesPage() {
 
   useEffect(() => {
     if (!customer?.customer_id) return;
+
     (async () => {
       try {
-        // Fetch policies with agent details
         const { data, error } = await supabase
           .from("policies")
-          .select(`
+          .select(
+            `
             *,
             agent:users!assigned_to (
               id,
@@ -97,9 +76,11 @@ export default function PoliciesPage() {
               email,
               phone
             )
-          `)
+          `
+          )
           .eq("customer_id", customer.customer_id)
           .order("created_at", { ascending: false });
+
         if (error) throw error;
         setPolicies((data ?? []) as unknown as Policy[]);
       } catch (err) {
@@ -110,398 +91,341 @@ export default function PoliciesPage() {
     })();
   }, [customer?.customer_id]);
 
-  // Derived policy types for filter
   const uniqueTypes = useMemo(() => {
-    const types = new Set(policies.map(p => p.policy_type).filter(Boolean));
+    const types = new Set(policies.map((p) => p.policy_type).filter(Boolean));
     return Array.from(types).sort();
   }, [policies]);
 
-  const filtered = useMemo(() => {
+  const filteredPolicies = useMemo(() => {
     let result = [...policies];
+
     if (typeFilter !== "all") {
-      result = result.filter((p) => p.policy_type === typeFilter);
+      result = result.filter((policy) => policy.policy_type === typeFilter);
     }
+
     if (statusFilter !== "all") {
-      result = result.filter((p) => p.status === statusFilter);
+      result = result.filter((policy) => policy.status === statusFilter);
     }
+
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const query = searchQuery.toLowerCase();
       result = result.filter(
-        (p) =>
-          p.policy_number?.toLowerCase().includes(q) ||
-          p.policy_type?.toLowerCase().includes(q) ||
-          p.insurer_name?.toLowerCase().includes(q)
+        (policy) =>
+          policy.policy_number?.toLowerCase().includes(query) ||
+          policy.policy_type?.toLowerCase().includes(query) ||
+          policy.insurer_name?.toLowerCase().includes(query)
       );
     }
+
     return result;
   }, [policies, searchQuery, typeFilter, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginatedPolicies = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+  const totalPages = Math.max(1, Math.ceil(filteredPolicies.length / PAGE_SIZE));
+  const paginatedPolicies = filteredPolicies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold font-mono text-foreground tracking-tight">Policies</h1>
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} total {filtered.length === 1 ? 'policy' : 'policies'}
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search policies..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full pl-9 pr-4 py-2 border-2 border-border bg-card text-sm rounded-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors placeholder:text-muted-foreground"
-          />
+    <div className="space-y-6">
+      <section className="rounded-[2rem] border border-[#eadfce] bg-white/85 p-6 shadow-[0_14px_32px_rgba(47,62,64,0.06)] backdrop-blur">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#798478]">Customer Policies</p>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="text-3xl font-bold tracking-tight text-[#2f3e40]">Your Insurance Records</h2>
+          <p className="text-sm font-medium text-[#627579]">
+            {filteredPolicies.length} {filteredPolicies.length === 1 ? "policy" : "policies"}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-[130px]">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+      </section>
+
+      <section className="rounded-[2rem] border border-[#eadfce] bg-white/90 p-4 shadow-[0_12px_28px_rgba(47,62,64,0.06)] sm:p-5">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto]">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9898]" />
+            <input
+              type="text"
+              placeholder="Search by policy number, type, or insurer"
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-11 w-full rounded-xl border border-[#e3d6c6] bg-[#fdfaf5] pl-10 pr-3 text-sm text-[#2f3e40] outline-none transition-colors placeholder:text-[#9aa6a6] focus:border-[#5d787a]"
+            />
+          </label>
+
+          <div className="relative">
+            <Filter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a9898]" />
             <select
               value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value);
+              onChange={(event) => {
+                setTypeFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-8 pr-8 py-2 border-2 border-border bg-card text-sm rounded-md appearance-none focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer"
+              className="h-11 w-full min-w-[170px] appearance-none rounded-xl border border-[#e3d6c6] bg-[#fdfaf5] pl-9 pr-9 text-sm text-[#2f3e40] outline-none transition-colors focus:border-[#5d787a]"
             >
-              <option value="all">All Types</option>
-              {uniqueTypes.map(t => (
-                <option key={t} value={t} className="capitalize">{t}</option>
+              <option value="all">All Policy Types</option>
+              {uniqueTypes.map((type) => (
+                <option key={type} value={type} className="capitalize">
+                  {type}
+                </option>
               ))}
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9898]" />
           </div>
 
-          <div className="relative min-w-[120px]">
+          <div className="relative">
             <select
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-3 pr-8 py-2 border-2 border-border bg-card text-sm rounded-md appearance-none focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer"
+              className="h-11 w-full min-w-[150px] appearance-none rounded-xl border border-[#e3d6c6] bg-[#fdfaf5] px-3 pr-9 text-sm text-[#2f3e40] outline-none transition-colors focus:border-[#5d787a]"
             >
-              <option value="all">All Status</option>
+              <option value="all">All Statuses</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>
               <option value="cancelled">Cancelled</option>
               <option value="archived">Archived</option>
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9898]" />
           </div>
         </div>
-      </div>
+      </section>
 
       {loading ? (
         <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 w-full rounded-md skeleton" />
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="h-20 w-full animate-pulse rounded-2xl bg-[#efe4d7]" />
           ))}
         </div>
       ) : (
         <>
-          {/* Desktop Table View */}
-          <div className="hidden md:block rounded-md border border-border bg-card text-card-foreground overflow-hidden shadow-sm">
-            <div className="w-full overflow-auto">
+          <section className="hidden overflow-hidden rounded-[2rem] border border-[#eadfce] bg-white/90 shadow-[0_12px_28px_rgba(47,62,64,0.06)] md:block">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40 text-muted-foreground text-left text-xs font-semibold">
-                    <th className="h-10 px-4 align-middle">Policy #</th>
-                    <th className="h-10 px-4 align-middle">Type</th>
-                    <th className="h-10 px-4 align-middle">Insurer</th>
-                    <th className="h-10 px-4 align-middle text-right">Premium</th>
-                    <th className="h-10 px-4 align-middle">Expiry</th>
-                    <th className="h-10 px-4 align-middle">Status</th>
-                    <th className="h-10 px-4 align-middle"></th>
+                <thead className="bg-[#f7f2ea] text-left text-[11px] font-bold uppercase tracking-[0.16em] text-[#798478]">
+                  <tr>
+                    <th className="px-4 py-3">Policy</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Insurer</th>
+                    <th className="px-4 py-3 text-right">Premium</th>
+                    <th className="px-4 py-3">Expiry</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedPolicies.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-[#798478]">
                         {searchQuery || typeFilter !== "all" || statusFilter !== "all"
-                          ? "No policies match your filters"
-                          : "No policies yet"}
+                          ? "No policies match your selected filters"
+                          : "No policies found"}
                       </td>
                     </tr>
                   ) : (
-                    paginatedPolicies.map((p) => {
-                      const isExpanded = expandedRow === p.id;
+                    paginatedPolicies.map((policy) => {
+                      const isExpanded = expandedRow === policy.id;
                       return (
-                        <React.Fragment key={p.id}>
-                          <tr
-                            onClick={() => setExpandedRow(isExpanded ? null : p.id)}
-                            className={`border-b border-border cursor-pointer transition-colors hover:bg-muted/30 ${isExpanded ? "bg-muted/10" : ""}`}
-                          >
-                            <td className="p-4 align-middle font-mono font-medium">{p.policy_number}</td>
-                            <td className="p-4 align-middle">
-                              <span className="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold bg-transparent capitalize">
-                                {p.policy_type}
+                        <Fragment key={policy.id}>
+                          <tr key={`${policy.id}-summary`} className="border-t border-[#f1e7da]">
+                            <td className="px-4 py-3.5 font-mono font-semibold text-[#2f3e40]">{policy.policy_number}</td>
+                            <td className="px-4 py-3.5">
+                              <span className="inline-flex rounded-full border border-[#e4d8c9] bg-[#fbf6ef] px-2.5 py-1 text-xs font-semibold capitalize text-[#4d6a6d]">
+                                {policy.policy_type}
                               </span>
                             </td>
-                            <td className="p-4 align-middle text-muted-foreground">
-                              {p.insurer_name || "—"}
+                            <td className="px-4 py-3.5 text-[#607172]">{policy.insurer_name || "-"}</td>
+                            <td className="px-4 py-3.5 text-right font-semibold text-[#2f3e40]">{formatCurrency(policy.premium_amount)}</td>
+                            <td className="px-4 py-3.5 text-[#4d6a6d]">{formatDate(policy.end_date)}</td>
+                            <td className="px-4 py-3.5">
+                              <StatusTag status={policy.status} />
                             </td>
-                            <td className="p-4 align-middle text-right font-mono font-medium">
-                              {formatCurrency(p.premium_amount)}
-                            </td>
-                            <td className="p-4 align-middle">
-                              {formatDate(p.end_date)}
-                            </td>
-                            <td className="p-4 align-middle">
-                              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${STATUS_COLORS[p.status] || STATUS_COLORS.archived}`}>
-                                {p.status}
-                              </span>
-                            </td>
-                            <td className="p-4 align-middle text-right">
-                              <button className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                            <td className="px-4 py-3.5 text-right">
+                              <button
+                                onClick={() => setExpandedRow(isExpanded ? null : policy.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e7d9c8] bg-white text-[#607172] transition-colors hover:bg-[#f4ece1]"
+                              >
                                 <Eye className="h-4 w-4" />
                               </button>
                             </td>
                           </tr>
+
                           {isExpanded && (
-                            <tr className="border-b border-border bg-muted/10">
-                              <td colSpan={7} className="p-0">
-                                <div className="p-6 grid grid-cols-2 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2 fade-in duration-200">
-                                  {/* Details */}
-                                  <div className="space-y-4">
-                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
-                                      <Shield className="h-4 w-4 text-primary" />
-                                      Policy Details
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <InfoRow icon={Calendar} label="Start Date" value={formatDate(p.start_date)} />
-                                      <InfoRow icon={Calendar} label="End Date" value={formatDate(p.end_date)} />
-                                      <InfoRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(p.sum_insured)} />
-                                      <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
-                                    </div>
-                                  </div>
+                            <tr key={`${policy.id}-details`} className="border-t border-[#f1e7da] bg-[#fcf9f4]">
+                              <td colSpan={7} className="px-4 py-5">
+                                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                                  <DetailBlock title="Policy Details" icon={Shield}>
+                                    <DetailRow icon={Calendar} label="Start Date" value={formatDate(policy.start_date)} />
+                                    <DetailRow icon={Calendar} label="End Date" value={formatDate(policy.end_date)} />
+                                    <DetailRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(policy.sum_insured)} />
+                                    <DetailRow icon={FileText} label="Frequency" value={capitalize(policy.payment_frequency || "Not Set")} />
+                                  </DetailBlock>
 
-                                  {/* Your Agent */}
-                                  <div className="space-y-4">
-                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
-                                      <User className="h-4 w-4 text-primary" />
-                                      Your Agent
-                                    </h4>
-                                    {p.agent ? (
-                                      <div className="space-y-3 rounded-md border border-border bg-card p-4">
-                                        <div className="flex items-center gap-3">
-                                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                            <User className="h-5 w-5 text-primary" />
-                                          </div>
-                                          <div>
-                                            <p className="font-semibold text-sm">{p.agent.name}</p>
-                                            <p className="text-xs text-muted-foreground">Insurance Advisor</p>
-                                          </div>
-                                        </div>
-                                        <div className="space-y-2 pt-2 border-t border-border">
-                                          {p.agent.phone && (
-                                            <a href={`tel:${p.agent.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                                              <Phone className="h-4 w-4" />
-                                              {p.agent.phone}
-                                            </a>
-                                          )}
-                                          <a href={`mailto:${p.agent.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                                            <Mail className="h-4 w-4" />
-                                            {p.agent.email}
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="rounded-md border border-border border-dashed p-4 text-center">
-                                        <p className="text-sm text-muted-foreground">Agent info not available</p>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Documents */}
-                                  <div className="space-y-4">
-                                    <h4 className="text-sm flex items-center gap-2 font-bold mb-4">
-                                      <FileText className="h-4 w-4 text-primary" />
-                                      Policy Document
-                                    </h4>
-                                    {p.pdf_url ? (
-                                      <div className="flex items-center justify-between rounded-md border border-border bg-card p-3 shadow-sm">
-                                        <div className="flex items-center gap-2">
-                                          <FileText className="h-5 w-5 text-primary" />
-                                          <div>
-                                            <p className="text-sm font-medium">Policy Copy</p>
-                                            <p className="text-xs text-muted-foreground">PDF Document</p>
-                                          </div>
-                                        </div>
+                                  <DetailBlock title="Assigned Advisor" icon={User}>
+                                    {policy.agent ? (
+                                      <div className="space-y-3 rounded-xl border border-[#e7d9c8] bg-white p-3">
+                                        <p className="text-sm font-semibold text-[#2f3e40]">{policy.agent.name}</p>
                                         <a
-                                          href={p.pdf_url}
-                                          download={`Policy_${p.policy_number}.pdf`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring border border-border hover:bg-muted h-9 px-3 gap-2"
+                                          href={`mailto:${policy.agent.email}`}
+                                          className="flex items-center gap-2 text-sm text-[#4d6a6d] hover:text-[#2f3e40]"
                                         >
-                                          <Download className="h-4 w-4" />
-                                          <span className="sr-only sm:not-sr-only">Download</span>
+                                          <Mail className="h-4 w-4" />
+                                          {policy.agent.email}
                                         </a>
+                                        {policy.agent.phone && (
+                                          <a
+                                            href={`tel:${policy.agent.phone}`}
+                                            className="flex items-center gap-2 text-sm text-[#4d6a6d] hover:text-[#2f3e40]"
+                                          >
+                                            <Phone className="h-4 w-4" />
+                                            {policy.agent.phone}
+                                          </a>
+                                        )}
                                       </div>
                                     ) : (
-                                      <div className="rounded-md border border-border border-dashed p-4 text-center">
-                                        <p className="text-sm text-muted-foreground">No document available</p>
-                                      </div>
+                                      <p className="rounded-xl border border-dashed border-[#dccdb9] bg-white/60 p-3 text-sm text-[#798478]">
+                                        Advisor details are not available.
+                                      </p>
                                     )}
-                                  </div>
+                                  </DetailBlock>
+
+                                  <DetailBlock title="Document Access" icon={FileText}>
+                                    {policy.pdf_url ? (
+                                      <a
+                                        href={policy.pdf_url}
+                                        download={`Policy_${policy.policy_number}.pdf`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2f3e40] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#5d787a]"
+                                      >
+                                        <Download className="h-4 w-4" />
+                                        Download Policy Copy
+                                      </a>
+                                    ) : (
+                                      <p className="rounded-xl border border-dashed border-[#dccdb9] bg-white/60 p-3 text-sm text-[#798478]">
+                                        No PDF has been uploaded for this policy.
+                                      </p>
+                                    )}
+                                  </DetailBlock>
                                 </div>
                               </td>
                             </tr>
                           )}
-                        </React.Fragment>
+                        </Fragment>
                       );
                     })
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
-          {/* Mobile Cards View */}
-          <div className="md:hidden space-y-3 stagger-list">
+          <section className="space-y-3 md:hidden">
             {paginatedPolicies.length === 0 ? (
-              <div className="rounded-md border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-[#eadfce] bg-white/90 p-6 text-center text-sm text-[#798478]">
                 {searchQuery || typeFilter !== "all" || statusFilter !== "all"
-                  ? "No policies match your filters"
-                  : "No policies yet"}
+                  ? "No policies match your selected filters"
+                  : "No policies found"}
               </div>
             ) : (
-              paginatedPolicies.map((p) => {
-                const isExpanded = expandedRow === p.id;
+              paginatedPolicies.map((policy) => {
+                const isExpanded = expandedRow === policy.id;
                 return (
-                  <div key={p.id} className={`rounded-md border transition-all ${isExpanded ? 'border-primary shadow-sm' : 'border-border bg-card shadow-sm hover:border-primary/50'}`}>
-                    <div
-                      className="p-4 cursor-pointer"
-                      onClick={() => setExpandedRow(isExpanded ? null : p.id)}
+                  <article key={policy.id} className="overflow-hidden rounded-2xl border border-[#eadfce] bg-white/90 shadow-[0_10px_24px_rgba(47,62,64,0.05)]">
+                    <button
+                      onClick={() => setExpandedRow(isExpanded ? null : policy.id)}
+                      className="w-full px-4 py-4 text-left"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <p className="font-mono text-sm font-bold">{p.policy_number}</p>
-                          <p className="text-sm text-muted-foreground">{p.insurer_name || "—"}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-mono text-sm font-bold text-[#2f3e40]">{policy.policy_number}</p>
+                          <p className="mt-1 text-sm text-[#607172]">{policy.insurer_name || "-"}</p>
                         </div>
-                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${STATUS_COLORS[p.status] || STATUS_COLORS.archived}`}>
-                          {p.status}
+                        <StatusTag status={policy.status} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-[#6f7f80]">
+                        <span className="inline-flex items-center gap-1 capitalize">
+                          <Shield className="h-3.5 w-3.5" />
+                          {policy.policy_type}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <IndianRupee className="h-3.5 w-3.5" />
+                          {formatCurrency(policy.premium_amount)}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {formatDate(policy.end_date)}
                         </span>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1 capitalize"><Shield className="h-3 w-3" /> {p.policy_type}</span>
-                        <span className="flex items-center gap-1"><IndianRupee className="h-3 w-3" /> {formatCurrency(p.premium_amount)}</span>
-                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {formatDate(p.end_date)}</span>
-                      </div>
-                    </div>
+                    </button>
 
                     {isExpanded && (
-                      <div className="px-4 pb-4 pt-2 border-t border-border bg-muted/10 animate-in slide-in-from-top-1 fade-in duration-200">
-                        <div className="grid grid-cols-2 gap-4 my-4">
-                          <InfoRow icon={Calendar} label="Start Date" value={formatDate(p.start_date)} />
-                          <InfoRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(p.sum_insured)} />
-                          <div className="col-span-2">
-                            <InfoRow icon={Clock} label="Payment Frequency" value={p.payment_frequency || "—"} capitalize />
-                          </div>
-                        </div>
+                      <div className="space-y-3 border-t border-[#f1e7da] bg-[#fcf9f4] px-4 py-4">
+                        <DetailRow icon={Calendar} label="Start Date" value={formatDate(policy.start_date)} />
+                        <DetailRow icon={IndianRupee} label="Sum Insured" value={formatCurrency(policy.sum_insured)} />
+                        <DetailRow icon={FileText} label="Frequency" value={capitalize(policy.payment_frequency || "Not Set")} />
 
-                        {/* Agent Contact - Mobile */}
-                        {p.agent && (
-                          <div className="mt-4 pt-4 border-t border-border">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Your Agent</h4>
-                            <div className="rounded-md border border-border bg-card p-3 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <User className="h-4 w-4 text-primary" />
-                                </div>
-                                <p className="font-semibold text-sm">{p.agent.name}</p>
-                              </div>
-                              <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                                {p.agent.phone && (
-                                  <a href={`tel:${p.agent.phone}`} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground h-8 px-3">
-                                    <Phone className="h-3.5 w-3.5" /> Call
-                                  </a>
-                                )}
-                                <a href={`mailto:${p.agent.email}`} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium border border-border bg-card h-8 px-3">
-                                  <Mail className="h-3.5 w-3.5" /> Email
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {p.pdf_url && (
-                          <div className="mt-4 pt-4 border-t border-border">
-                            <a
-                              href={p.pdf_url}
-                              download={`Policy_${p.policy_number}.pdf`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 gap-2 shadow-sm"
-                            >
-                              <Download className="h-4 w-4" /> Download Policy Copy
+                        {policy.agent && (
+                          <div className="space-y-2 rounded-xl border border-[#e3d6c6] bg-white p-3">
+                            <p className="text-sm font-semibold text-[#2f3e40]">{policy.agent.name}</p>
+                            <a href={`mailto:${policy.agent.email}`} className="flex items-center gap-2 text-sm text-[#4d6a6d]">
+                              <Mail className="h-4 w-4" />
+                              {policy.agent.email}
                             </a>
+                            {policy.agent.phone && (
+                              <a href={`tel:${policy.agent.phone}`} className="flex items-center gap-2 text-sm text-[#4d6a6d]">
+                                <Phone className="h-4 w-4" />
+                                {policy.agent.phone}
+                              </a>
+                            )}
                           </div>
                         )}
-                        {!p.pdf_url && (
-                          <div className="mt-4 pt-4 border-t border-border">
-                            <p className="text-xs text-center text-muted-foreground">No policy document available</p>
-                          </div>
+
+                        {policy.pdf_url && (
+                          <a
+                            href={policy.pdf_url}
+                            download={`Policy_${policy.policy_number}.pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2f3e40] px-4 py-2.5 text-sm font-semibold text-white"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download Policy Copy
+                          </a>
                         )}
                       </div>
                     )}
-                  </div>
+                  </article>
                 );
               })
             )}
-          </div>
+          </section>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 border-t border-border pt-4">
-              <p className="text-xs text-muted-foreground">
-                Showing {(currentPage - 1) * PAGE_SIZE + 1}—
-                {Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            <section className="flex items-center justify-between rounded-2xl border border-[#eadfce] bg-white/90 px-4 py-3 shadow-[0_8px_20px_rgba(47,62,64,0.04)]">
+              <p className="text-xs font-semibold text-[#798478]">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1} - {Math.min(currentPage * PAGE_SIZE, filteredPolicies.length)} of {filteredPolicies.length}
               </p>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <button
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(p => p - 1)}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none h-8 w-8 border border-border bg-transparent"
+                  onClick={() => setCurrentPage((page) => page - 1)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e3d6c6] bg-[#fdfaf5] text-[#607172] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="px-3 text-sm font-medium">
+                <span className="text-sm font-semibold text-[#4d6a6d]">
                   {currentPage} / {totalPages}
                 </span>
                 <button
                   disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(p => p + 1)}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none h-8 w-8 border border-border bg-transparent"
+                  onClick={() => setCurrentPage((page) => page + 1)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e3d6c6] bg-[#fdfaf5] text-[#607172] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-            </div>
+            </section>
           )}
         </>
       )}
@@ -509,16 +433,72 @@ export default function PoliciesPage() {
   );
 }
 
-function InfoRow({ icon: Icon, label, value, capitalize }: { icon: any, label: string, value: string, capitalize?: boolean }) {
+function DetailBlock({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+    <div className="space-y-3">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-[#2f3e40]">
+        <Icon className="h-4 w-4 text-[#5d787a]" />
+        {title}
+      </h3>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function DetailRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-[#e8dbc9] bg-white p-2.5">
+      <Icon className="mt-0.5 h-4 w-4 text-[#6f7f80]" />
       <div>
-        <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">{label}</p>
-        <p className={`text-sm font-medium text-foreground ${capitalize ? "capitalize" : ""}`}>
-          {value}
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8a9898]">{label}</p>
+        <p className="text-sm font-semibold text-[#2f3e40]">{value}</p>
       </div>
     </div>
   );
+}
+
+function StatusTag({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${STATUS_STYLE[status] ?? STATUS_STYLE.archived}`}>
+      {status}
+    </span>
+  );
+}
+
+function formatDate(value: string | undefined): string {
+  if (!value) return "-";
+  return format(new Date(value), "dd MMM yyyy");
+}
+
+function formatCurrency(value: number | undefined): string {
+  if (value === undefined || value === null) return "INR 0";
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function capitalize(value: string): string {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
