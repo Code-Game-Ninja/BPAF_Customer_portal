@@ -13,7 +13,8 @@ import {
   Sun,
   Moon,
   Menu,
-  X
+  X,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +24,7 @@ import { useTheme } from "@/lib/theme-context";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/policies", label: "My Policies", icon: FileText },
+  { href: "/dashboard/claims", label: "My Claims", icon: AlertCircle },
   { href: "/dashboard/renewals", label: "Renewals", icon: RefreshCcw },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ];
