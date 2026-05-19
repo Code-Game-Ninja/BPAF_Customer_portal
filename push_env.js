@@ -15,7 +15,7 @@ const keysToPush = [
   "SMTP_FROM"
 ];
 
-const targetEnvs = ['production', 'preview', 'development'];
+const targetEnvs = ['production', 'development'];
 
 const runVercelEnvAdd = (key, env, value) => {
   return new Promise((resolve, reject) => {
@@ -28,42 +28,12 @@ const runVercelEnvAdd = (key, env, value) => {
       require('child_process').execSync(`npx vercel env rm ${key} ${env} -y`, { stdio: 'ignore' }); 
     } catch(e){}
 
-    const p = spawn('npx.cmd', ['vercel', 'env', 'add', key, env], {
-      shell: true
-    });
-
-    let answeredSensitive = false;
-    let answeredValue = false;
-
-    p.stdout.on('data', (data) => {
-      const out = data.toString();
-      if (out.includes('Mark as sensitive?') && !answeredSensitive) {
-        p.stdin.write('N\n');
-        answeredSensitive = true;
-      } 
-      if (out.includes("What's the value of") && !answeredValue) {
-        p.stdin.write(cleanValue + '\n');
-        answeredValue = true;
-      }
-    });
-    
-    p.stderr.on('data', (data) => {
-      // Sometimes prompts come via stderr
-      const out = data.toString();
-      if (out.includes('Mark as sensitive?') && !answeredSensitive) {
-        p.stdin.write('N\n');
-        answeredSensitive = true;
-      } 
-      if (out.includes("What's the value of") && !answeredValue) {
-        p.stdin.write(cleanValue + '\n');
-        answeredValue = true;
-      }
-    });
-
-    p.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Exit code ${code}`));
-    });
+    try {
+      require('child_process').execSync(`npx vercel env add ${key} ${env} --value "${cleanValue.replace(/"/g, '\\"')}" --yes`, { stdio: 'ignore' });
+      resolve();
+    } catch (e) {
+      reject(e);
+    }
   });
 };
 

@@ -7,7 +7,13 @@ let _client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: {
+      name: "bapf-customer-session",
+      path: "/",
+      sameSite: "lax",
+    },
     auth: {
+      storageKey: "bapf-customer-session",
       lock:
         typeof navigator !== "undefined" && navigator.locks
           ? async <R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
